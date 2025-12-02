@@ -16,12 +16,14 @@ SimpleWaypointFollower::SimpleWaypointFollower(const rclcpp::NodeOptions & optio
 
   initTf();
   initPublisher();
-//  initSubscription();
-//  initServiceServer();
+  initSubscription();
+  initServiceServer();
 //  initActionClient();
-  initTimer();
 
-//  readWaypointYaml();
+  readWaypointYaml();
+
+  initsendGoal();
+  initTimer(); 
 }
 
 void SimpleWaypointFollower::getParam()
@@ -37,8 +39,8 @@ void SimpleWaypointFollower::getParam()
   declare_parameter("waypoint_yaml_path", "waypoint.yaml");
 	declare_parameter("waypoint_radius",0.5);
 
-	waypoint_yaml_path_ = get_parameter("theta_cell_num").as_string();
-  waypoint_radius_ = get_parameter("theta_cell_num").as_double();
+	waypoint_yaml_path_ = get_parameter("waypoint_yaml_path").as_string();
+  waypoint_radius_ = get_parameter("waypoint_radius").as_double();
 }
 
 void SimpleWaypointFollower::initTf()
@@ -53,102 +55,52 @@ void SimpleWaypointFollower::initPublisher()
 {
   goal_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
     "goal_pose", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(
+    "cmd_vel", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 }
-/*
+
+
 void SimpleWaypointFollower::initSubscription()
 {
-  auto waypoints_callback = [&](const simple_waypoint_follower_msgs::msg::Waypoints::ConstSharedPtr msg) {
-    if (!msg->waypoints.size()) {
-      this->loop_timer_->cancel();
-      this->cancelGoal();
-      this->waypoint_id_ = 0;
-    }
-    if (waypoint_id_ >= msg->waypoints.size()) {
-      if (msg->waypoints.size()) {
-        waypoint_id_ = msg->waypoints.size() - 1;
-      } else {
-        waypoint_id_ = 0;
-      }
-    }
-    waypoints_ = *msg;
-  };
-
-  waypoints_sub_ = this->create_subscription<simple_waypoint_follower_msgs::msg::Waypoints>(
-    "waypoints", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable(), waypoints_callback);
+  cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+    "cmd_vel_sub", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable(), 
+    std::bind(&SimpleWaypointFollower::cmd_vel_callback, this, std::placeholders::_1));
 }
-*/
-/*
+
+void SimpleWaypointFollower::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg){
+  geometry_msgs::msg::Twist cmd_vel;
+  if(_is_robot_wait){
+    cmd_vel.linear.x=0;
+    cmd_vel.angular.z=0;
+  }else{
+    cmd_vel.linear.x=msg->linear.x;
+    cmd_vel.angular.z=msg->angular.z;
+  }
+    
+  // Publish command
+  cmd_vel_pub_->publish(cmd_vel);
+}
+
+
 void SimpleWaypointFollower::initServiceServer()
 {
-  auto load_waypoint_yaml =
-    [this](
-      const std::shared_ptr<rmw_request_id_t> request_header,
-      std::shared_ptr<simple_waypoint_follower_msgs::srv::LoadWaypointYaml::Request> request,
-      std::shared_ptr<simple_waypoint_follower_msgs::srv::LoadWaypointYaml::Response> response) -> void {
-    (void)request_header;
-
-    this->loop_timer_->reset();
-    waypoint_yaml_path_ = request->waypoint_yaml_path;
-    this->readWaypointYaml();
-    this->loop_timer_->cancel();
-    this->cancelGoal();
-    this->waypoint_id_ = 0;
-
-    response->success = true;
-  };
-  load_waypoint_yaml_service_server_ =
-    create_service<simple_waypoint_follower_msgs::srv::LoadWaypointYaml>("load_waypoint_yaml", load_waypoint_yaml);
-
-  auto start_waypoint_follower =
+  auto restart_waypoint_follower =
     [this](
       const std::shared_ptr<rmw_request_id_t> request_header,
       [[maybe_unused]] const std::shared_ptr<std_srvs::srv::Trigger_Request> request,
       std::shared_ptr<std_srvs::srv::Trigger_Response> response) -> void {
     (void)request_header;
 
-    this->loop_timer_->reset();
-    this->sendGoal(this->waypoints_.waypoints[this->waypoint_id_].pose);
+    _is_robot_wait = false;
 
     response->success = true;
     response->message = "Called /start_waypoint_follower. Send goal done.";
   };
-  start_waypoint_follower_service_server_ =
-    create_service<std_srvs::srv::Trigger>("start_waypoint_follower", start_waypoint_follower);
+  restart_waypoint_follower_service_server_ =
+    create_service<std_srvs::srv::Trigger>("restart_waypoint_follower", restart_waypoint_follower);
 
-  auto stop_waypoint_follower =
-    [this](
-      const std::shared_ptr<rmw_request_id_t> request_header,
-      [[maybe_unused]] const std::shared_ptr<std_srvs::srv::Trigger_Request> request,
-      std::shared_ptr<std_srvs::srv::Trigger_Response> response) -> void {
-    (void)request_header;
-
-    this->loop_timer_->cancel();
-    this->cancelGoal();
-
-    response->success = true;
-    response->message = "Called /stop_waypoint_follower. Cancel goal done.";
-  };
-  stop_waypoint_follower_service_server_ =
-    create_service<std_srvs::srv::Trigger>("stop_waypoint_follower", stop_waypoint_follower);
-
-  auto cancel_waypoint_follower =
-    [this](
-      const std::shared_ptr<rmw_request_id_t> request_header,
-      [[maybe_unused]] const std::shared_ptr<std_srvs::srv::Trigger_Request> request,
-      std::shared_ptr<std_srvs::srv::Trigger_Response> response) -> void {
-    (void)request_header;
-
-    this->loop_timer_->cancel();
-    this->cancelGoal();
-    this->waypoint_id_ = 0;
-
-    response->success = true;
-    response->message = "Called /cancel_waypoint_follower. Cancel goal done.";
-  };
-  cancel_waypoint_follower_service_server_ =
-    create_service<std_srvs::srv::Trigger>("cancel_waypoint_follower", cancel_waypoint_follower);
 }
-
+/*
 void SimpleWaypointFollower::initActionClient()
 {
   navigate_to_goal_action_client_ = rclcpp_action::create_client<NavigateToGoal>(
@@ -181,6 +133,7 @@ void SimpleWaypointFollower::readWaypointYaml()
       waypoint.pose.position.y = waypoint_yaml["position"]["y"].as<double>();
       waypoint.pose.orientation.w = cos(waypoint_yaml["euler_angle"]["z"].as<double>() / 2.);
       waypoint.pose.orientation.z = sin(waypoint_yaml["euler_angle"]["z"].as<double>() / 2.);
+      waypoint.robot_wait = waypoint_yaml["robot_wait"].as<bool>();
 
       if (waypoint_yaml["functions"].IsDefined()) {
         for (const auto & function : waypoint_yaml["functions"]) {
@@ -224,6 +177,12 @@ bool SimpleWaypointFollower::isInsideWaypointArea(
   }
 
   return false;
+}
+
+void SimpleWaypointFollower::initsendGoal(){
+  this->waypoint_id_ = 1;
+  RCLCPP_INFO(get_logger(), "Send first Goal");
+  sendGoal(waypoints_.waypoints[waypoint_id_].pose);
 }
 
 void SimpleWaypointFollower::sendGoal(const geometry_msgs::msg::Pose & goal)
@@ -293,6 +252,7 @@ void SimpleWaypointFollower::loop()
     if (waypoints_.waypoints.size() - 1 != waypoint_id_) {
       if (isInsideWaypointArea(robot_pose_.pose, waypoints_.waypoints[waypoint_id_])) {
         RCLCPP_INFO(get_logger(), "Send next goal");
+        _is_robot_wait = waypoints_.waypoints[waypoint_id_].robot_wait;
         sendGoal(waypoints_.waypoints[++waypoint_id_].pose);
       }
     } else {

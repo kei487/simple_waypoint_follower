@@ -8,18 +8,21 @@ waypoints:
     functions:
       - function: variable_waypoint_radius
         waypoint_radius: 0.5
+    robot_wait: false 
   - id: 2
     position:
       x: 11.304292678833008
       y: 8.42270278930664
     euler_angle:
       z: 0.0
+    robot_wait: true 
   - id: 3
     position:
       x: 11.815327644348145
       y: 10.003898620605469
     euler_angle:
       z: 0.0
+    robot_wait: false 
   - id: 4
     position:
       x: 11.34167766571045

@@ -12,7 +12,7 @@
 #include "simple_waypoint_follower_msgs/msg/waypoints.hpp"
 // #include "simple_waypoint_follower_msgs/srv/load_waypoint_yaml.hpp"
 #include <geometry_msgs/msg/pose_stamped.hpp>
-//#include <std_srvs/srv/trigger.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -33,7 +33,7 @@ protected:
   void initTf();
   void initPublisher();
   void initSubscription();
-//  void initServiceServer();
+  void initServiceServer();
 //  void initActionClient();
   void initTimer();
 
@@ -42,17 +42,19 @@ protected:
   bool isInsideWaypointArea(
     const geometry_msgs::msg::Pose & robot_pose, const simple_waypoint_follower_msgs::msg::Waypoint & waypoint);
   void sendGoal(const geometry_msgs::msg::Pose & goal);
+  void initsendGoal();
 //  void cancelGoal();
+  void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
 
   void loop();
 
 private:
   // clang-format off
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
-//  rclcpp::Publisher<simple_waypoint_follower_msgs::msg::Waypoints>::SharedPtr waypoints_pub_;
-//  rclcpp::Subscription<simple_waypoint_follower_msgs::msg::Waypoints>::SharedPtr waypoints_sub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 //  rclcpp::Service<simple_waypoint_follower_msgs::srv::LoadWaypointYaml>::SharedPtr load_waypoint_yaml_service_server_;
-//  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_waypoint_follower_service_server_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr restart_waypoint_follower_service_server_;
 //  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_waypoint_follower_service_server_;
 //  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr cancel_waypoint_follower_service_server_;
 //  rclcpp_action::Client<NavigateToGoal>::SharedPtr navigate_to_goal_action_client_;
@@ -74,6 +76,7 @@ private:
   geometry_msgs::msg::PoseStamped robot_pose_;
 
   bool get_robot_pose_;
+  bool _is_robot_wait;
 };
 
 }  // namespace simple_waypoint_follower
