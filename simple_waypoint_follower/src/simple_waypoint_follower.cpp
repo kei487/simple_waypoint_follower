@@ -76,9 +76,11 @@ void SimpleWaypointFollower::cmd_vel_callback(const geometry_msgs::msg::Twist::S
     cmd_vel.linear.x=msg->linear.x;
     cmd_vel.angular.z=msg->angular.z;
   }
+  vel = cmd_vel.linear.x*cmd_vel.linear.x + cmd_vel.angular.z*cmd_vel.angular.z;
     
   // Publish command
   cmd_vel_pub_->publish(cmd_vel);
+  RCLCPP_INFO(this->get_logger(), "Sent cmd_vel: %lf",vel);
 }
 
 
@@ -183,6 +185,7 @@ void SimpleWaypointFollower::initsendGoal(){
   this->waypoint_id_ = 1;
   RCLCPP_INFO(get_logger(), "Send first Goal");
   sendGoal(waypoints_.waypoints[waypoint_id_].pose);
+  RCLCPP_INFO(this->get_logger(), "Sent first goal");
 }
 
 void SimpleWaypointFollower::sendGoal(const geometry_msgs::msg::Pose & goal)
@@ -216,7 +219,6 @@ void SimpleWaypointFollower::sendGoal(const geometry_msgs::msg::Pose & goal)
   goal_stamp.pose = goal;
 
   goal_pub_ -> publish(goal_stamp);
-  RCLCPP_INFO(this->get_logger(), "Sent goal");
 }
 
 /*
@@ -246,6 +248,10 @@ void SimpleWaypointFollower::loop()
     this->waypoint_id_ = 0;
   }
   */
+  if(vel<10e-6){
+    sendGoal(waypoints_.waypoints[waypoint_id_].pose);
+    RCLCPP_INFO(this->get_logger(), "ReSent goal");
+  }
 
   getMapFrameRobotPose(robot_pose_);
   if (get_robot_pose_) {

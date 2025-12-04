@@ -77,6 +77,7 @@ private:
 
   bool get_robot_pose_;
   bool _is_robot_wait;
+  double vel=0;
 };
 
 }  // namespace simple_waypoint_follower
